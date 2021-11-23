@@ -1,0 +1,247 @@
+//INICIO
+
+- Crear la carpeta principal del proyecto (mysql-typescript-app)
+
+- Node js no posee entornos virtuales por lo que se usara uno de python (anaconda)
+
+- Abrir terminal integrada, ejecutar: npm init -y (para crear el archivo package.json)
+
+- package.json: Describe el proyect y lista los paquetes que se utilizaron
+
+- Abrir terminal integrada, ejecutar: npm i typescript -D (instalar compilador TS)
+
+- El comando anterior lleva al final: -D para indicar que se usara TS solo en desarrollo
+  y no en produccion.
+
+- Abrir terminal integrada, ejecutar: npx typescript --init (crear el archivo tsconfig.json)
+
+-----------------------------------------------------------------------------------------------
+
+//ESTRUCTURA DEL PROYECTO
+
+- Dentro de la carpeta raiz, crear una subcarpeta llamada y un archivo: "src/index.ts" 
+
+- Abrir terminal integrada, ejecutar: npm i express (framework / node), despues: npm i @types/express -D
+
+- Ingresamos al archivo "tsconfig.json" y buscamos el modulo comentado: //"outDir": "./", y lo
+  descomentamos (se encuentra en la linea 50) y añadimos: "outDir": "./dist", El codigo TS se va a
+  transpilar a JS dentro de la carpeta ./dist
+
+- Abrir terminal integrada, ejecutar: npx tsc (Ts leera el archivo "tsconfig.json" y compilara el codigo
+  dentro de la carpeta "dist" que fue la indicada en la configuracion (tsconfig.json))
+
+- Abrir terminal integrada, ejecutar: node /dist/index.js (Para ejecutar el codigo fuente)
+
+- Va ser muy incomodo convertir de forma manual ts a js por cada modificacion, asi que la conversion 
+  debe hacerse automaticamente, instalamos el modulo: npm i nodemon
+
+- Node js no entiende codigo de TS, para que lo lea necesitamos instalar un modulo: npm i ts-node -D
+
+- Luego modificamos el archivo "package.json" (linea 6) y escribimos:
+
+  "scripts": { //En su interior tendra otra informacion que debe eliminarse y sustuirse por esta
+    "build": "tsc",
+    "dev": "nodemon src/index.ts --exec ts-node"
+  },
+
+- Instalar un complemento de express: npm i morgan 
+  Despues: npm i @types/morgan -D (Ver peticiones HTTP)
+
+- Para utilizar el modulo "nodemon" ejecutamos: npm run dev
+
+-----------------------------------------------------------------------------------------------------
+
+//CONECTAR NODE JS CON MYSQL
+
+- Instalamos el modulo: npm i mysql2 
+  Despues: npm i types/mysql2 -D (A los desarrollores se les olvido colocar el "@" en "types")
+
+- Creamos un nuevo archivo: "src/database.ts"
+
+- En el interior del archivo database.ts:
+
+import { createPool } from 'mysql2/promise' //{ createPool }: Clase del modulo 'mysql2/promise' 
+
+export async function connect(){ //Node js trabaja de forma asincrona
+    const connection = await createPool({
+        host: 'localhost', //direccion ip del servidor que tiene la ddbb
+        user: 'root', //usuario de la bbdd
+        database: 'node_mysql_ts', //nombre de la bbdd
+        connectionLimit: 10 //Crear un hilo de ejecucion
+    });
+    return connection;
+}
+
+--------------------------------------------------------------------------------------------------------
+
+//RECURSOS
+
+- Crear 3 subcarpeta en: "src/controller/", "src/interface/", "src/routes/"
+
+- Creamos un nuevo archivo en: "src/controller/index.controller.ts"
+- Creamos la primera ruta en "index.controller.ts":
+
+import {Request, Response} from 'express' //Importamos modulos de express
+
+export function indexWelcome(req: Request, res: Response): Response{
+    return res.json('Welcome to my API :)')
+}
+
+*****************************************************************
+- Creamos un nuevo archivo en: "src/routes/index.routes.ts"
+- Creamos la primera ruta en "index.routes.ts":
+
+import {Router} from 'express'
+
+const router = Router();
+
+import {indexWelcome} from '../controller/index.controller' //importamos la fun controller
+
+router.route('/')
+    .get(indexWelcome)
+
+export default router;
+
+*****************************************************************
+- Creamos un nuevo archivo en: "src/controller/post.controller.ts"
+- Creamos la primera ruta en "post.controller.ts":
+
+import {Request, Response} from 'express'
+import {connect} from '../database'
+import {Post} from '../interface/Post'
+
+export async function getPosts(req:Request, res:Response): Promise<Response>{
+    const conn = await connect();
+    const posts = await conn.query('SELECT * FROM posts');
+    return res.json(posts[0]);
+}
+
+export async function createPost(req: Request, res: Response) {
+    const newPost: Post = req.body;
+    const conn = connect();
+    await (await conn).query('INSERT INTO posts SET ?', [newPost]);
+    return res.json({
+        message: 'Post Created'
+    })
+}
+
+export async function getPost(req: Request, res: Response): Promise<Response> {
+    const id = req.params.postId;
+    const conn = await connect();
+    const post = await conn.query('SELECT * FROM posts WHERE id = ?', [id]);
+    return res.json(post[0]);
+}
+
+export async function deletePost(req: Request, res: Response) {
+    const id = req.params.postId;
+    const conn = await connect();
+    await conn.query('DELETE FROM posts WHERE id = ?', [id]);
+    return res.json({
+        message: "Post deleted"
+    })
+}
+
+export async function updatePost(req: Request, res: Response) {
+    const id = req.params.postId;
+    const update: Post = req.body;
+    const conn = await connect();
+    await conn.query('UPDATE posts SET ? WHERE id = ?', [update, id]);
+    return res.json({
+        message: "Post updated"
+    });
+}
+
+*****************************************************************
+
+- Creamos un nuevo archivo en: "src/routes/post.routes.ts"
+- Creamos la primera ruta en "post.routes.ts":
+
+import {Router} from 'express'
+import {getPosts, createPost, getPost, deletePost, updatePost} from '../controller/post.controller'
+
+const router = Router();
+
+router.route('/')
+    .get(getPosts)
+    .post(createPost);
+
+router.route('/:postId')
+    .get(getPost)
+    .delete(deletePost)
+    .put(updatePost);
+
+export default router;
+********************************************************************
+
+- Creamos un nuevo archivo en: "src/interface/Post.ts"
+- Creamos la primera ruta en "Post.ts":
+
+export interface Post{
+    id?: string;
+    title: string;
+    description: string;
+    image_url: string;
+    created_at: Date;
+}
+
+**********************************************************************
+
+-----------------------------------------------------------------------------------------------------
+
+//CONFIGURACION DEL PROYECTO
+
+- Creamos un nuevo archivo: "src/app.ts" que contendra la configuracion del proyecto
+
+- dentro del archivo app.ts Digitamos:
+
+import express, {Application} from 'express'
+import morgan from 'morgan'
+
+//Routes
+import IndexRoutes from './routes/index.routes'
+import PostRoutes from './routes/post.routes'
+
+export class App{
+
+    private app: Application;
+    
+    constructor(private port?: number | string){
+        this.app = express();
+        this.setting();
+        this.middlewares();
+        this.routes();
+    }
+
+    setting(){
+        this.app.set('port', this.port || process.env.PORT || 3000);
+    }
+
+    middlewares(){
+        this.app.use(morgan('dev')); //Mostrar msj por consola
+        //this.app.use(express.urlencoded({extended: false})) //recibir datos de un formulario
+        this.app.use(express.json())
+    }
+
+    routes(){
+        this.app.use(IndexRoutes);
+        this.app.use('/posts', PostRoutes);
+    }
+
+    async listen(){
+        await this.app.listen(this.app.get('port'));
+        console.log('Server on port', this.app.get('port'));
+        
+    }
+}
+
+- Creamos un nuevo archivo: "src/index.ts" que contendra la configuracion del proyecto
+
+- dentro del archivo index.ts Digitamos:
+
+import {App} from './app'
+
+!async function(){
+    const app = new App();
+    await app.listen();
+}();
+
